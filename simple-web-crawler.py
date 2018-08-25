@@ -1,7 +1,7 @@
 import argparse
 import re
 
-from graphviz import Digraph
+from pygraphviz import *
 from scrapy import Selector
 from scrapy.crawler import CrawlerProcess
 from scrapy.linkextractors import LinkExtractor
@@ -14,7 +14,7 @@ parser.add_argument('-o', metavar='output_filename', dest="output_filename", typ
                     help='The output filename.')
 
 arguments = parser.parse_args()
-graph = Digraph()
+graph = AGraph(directed=True, rankdir="LR")
 
 
 def extract_domain(url):
@@ -23,6 +23,7 @@ def extract_domain(url):
         return domain
     except Exception as e:
         return None
+
 
 def extract_title(response):
     try:
@@ -37,21 +38,14 @@ def make_node_label(response):
     return (extract_title(response) + "\n" + response.request.url).strip()
 
 
-def make_node_name(url):
-    # problems with Graphviz node names
-    name = "\"" + url + "\""
-    name = name.replace("://", ".")
-    return name
-
 class SimpleSpider(CrawlSpider):
     name = 'simplespider'
 
-    rules = (
-        Rule(LinkExtractor(), callback='parse_item', follow=True,),
-    )
+    rules = [Rule(LinkExtractor(), callback='parse_item', follow=True,)]
+    # custom_settings = {'DUPEFILTER_CLASS': 'scrapy.dupefilters.BaseDupeFilter'}
 
     def parse_start_url(self, response):
-        graph.node(make_node_name(response.request.url), label=make_node_label(response))
+        graph.add_node(response.request.url, label=make_node_label(response))
         request = super(SimpleSpider, self).parse_start_url(response)
         return request
 
@@ -60,13 +54,16 @@ class SimpleSpider(CrawlSpider):
             r.meta["parent_url"] = response.request.url
             yield r
 
-
     def parse_item(self, response):
-        current_url = make_node_name(response.request.url)
-        parent_url = make_node_name(response.meta["parent_url"])
-        # print "Parsed page: %s" % current_url, "Parent page: %s" % parent_url
-        graph.node(current_url, label=make_node_label(response))
-        graph.edge(parent_url, current_url)
+        current_url = response.request.url
+
+        # https://github.com/scrapy/scrapy/issues/15: Scrapy does not filter redirections
+        if extract_domain(current_url) != self.allowed_domains[0]:
+            return
+        graph.add_node(current_url, label=make_node_label(response))
+
+        parent_url = response.meta["parent_url"]
+        graph.add_edge(parent_url, current_url)
 
 
 def main():
@@ -88,8 +85,8 @@ def main():
     process.start()  # the script will block here until the crawling is finished
 
     graph.graph_attr["rankdir"] = "LR"
-    graph.format = "svg"
-    graph.render(arguments.output_filename)
+    graph.layout("dot")
+    graph.draw(arguments.output_filename, format="svg")
 
 
 

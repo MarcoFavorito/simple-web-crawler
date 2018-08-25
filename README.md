@@ -22,7 +22,8 @@ Then, run the following:
 
 E.g.:
 
-    python2 simple-web-crawler.py https://www.lipsum.com/
+    python2 simple-web-crawler.py https://www.lipsum.com/ -o lipsum-output.svg
 
+That yields `lipsum-output.svg`:
 
-You can find the map in `output.svg` and in DOT format in `output`.
+![](./lipsum-output.svg)
